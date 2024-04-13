@@ -1,0 +1,18 @@
+.indicator-container {
+    display: flex;
+    justify-content: space-around;
+    padding: 20px;
+}
+
+.indicator {
+    width: 100px;
+    height: 100px;
+    border: 2px solid black;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: center center;
+    border-radius: 50%;
+    background-color: lightblue;
+    transition: transform 0.3s ease-in-out;
+}

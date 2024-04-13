@@ -1,0 +1,154 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebRTC Data Channel Example</title>
+    <script>
+        let pc;
+        let ws;
+
+        async function createPeerConnection() {
+            pc = new RTCPeerConnection();
+
+            const dataChannel = pc.createDataChannel("telemetry");
+
+            dataChannel.onopen = () => console.log("Data channel opened.");
+            dataChannel.onclose = () => console.log("Data channel closed.");
+            dataChannel.onmessage = e => document.getElementById('telemetry').textContent = e.data;
+
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    console.log('event candidate', event.candidate)
+                    ws.send(event.candidate);
+                }
+            };
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({'sdp': pc.localDescription.toJSON()}));
+        }
+
+        function startWebSocket() {
+            ws = new WebSocket('ws://localhost:8765');
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                createPeerConnection();
+            };
+            ws.onmessage = async event => {
+                const data = JSON.parse(event.data);
+                if (data.sdp) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data));
+                } else if (data.candidate) {
+                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                }
+            };
+        }
+
+        window.onload = startWebSocket;
+    </script>
+</head>
+<body>
+    <h2>Telemetry Data</h2>
+    <pre id="telemetry"></pre>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>WebRTC Data Channel Example</title>
+    <styles src="./styles.css"></styles>
+    <script>
+        let pc;
+        let ws;
+
+        async function createPeerConnection() {
+            pc = new RTCPeerConnection();
+
+            const dataChannel = pc.createDataChannel("telemetry");
+
+            dataChannel.onopen = () => console.log("Data channel opened.");
+            dataChannel.onclose = () => console.log("Data channel closed.");
+            dataChannel.onmessage = e => {
+                // console.log('message!')
+                document.getElementById('telemetry').textContent = e.data;
+                // console.log(e.data)
+                const [yaw, pitch, roll] = e.data.match(/-?\d+\.\d+/g).map(Number);
+                // console.log(yaw, pitch, roll)
+                updateIndicators(pitch, roll, yaw)
+            }
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    console.log('ICE candidate:', event.candidate)
+                    if (event.candidate) {
+                        ws.send(JSON.stringify({
+                            'candidate': {
+                                foundation: event.candidate.foundation,
+                                ip: event.candidate.address,
+                                port: event.candidate.port,
+                                priority: event.candidate.priority,
+                                protocol: event.candidate.protocol,
+                                component: 1,
+                                sdpMid: event.candidate.sdpMid,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                type: event.candidate.type 
+                            }
+                        }));
+                    }
+                }
+            };
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({ 'sdp': pc.localDescription }));
+        }
+
+        function startWebSocket() {
+            ws = new WebSocket('ws://localhost:8765');
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                createPeerConnection();
+            };
+            ws.onmessage = async event => {
+                const data = JSON.parse(event.data);
+                if (data.sdp) {
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                } else if (data.candidate) {
+                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                }
+            };
+        }
+
+        
+        function updateIndicators(pitch, roll, yaw) {
+            const pitchElement = document.getElementById('pitch');
+            const rollElement = document.getElementById('roll');
+            const yawElement = document.getElementById('yaw');
+            
+            pitchElement.style.transform = `rotateX(${pitch}deg)`;
+            rollElement.style.transform = `rotateY(${roll}deg)`;
+            yawElement.style.transform = `rotateZ(${yaw}deg)`;
+
+            pitchElement.textContent = `Pitch: ${pitch}°`;
+            rollElement.textContent = `Roll: ${roll}°`;
+            yawElement.textContent = `Yaw: ${yaw}°`;
+        }
+
+
+        window.onload = startWebSocket;
+    </script>
+</head>
+
+<body>
+    <h2>Telemetry Data</h2>
+    <pre id="telemetry"></pre>
+
+        <div class="indicator-container">
+            <div class="indicator" id="pitch">Pitch: 0°</div>
+            <div class="indicator" id="roll">Roll: 0°</div>
+            <div class="indicator" id="yaw">Yaw: 0°</div>
+        </div>
+</body>
