@@ -1,59 +1,3 @@
-<!-- <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>WebRTC Data Channel Example</title>
-    <script>
-        let pc;
-        let ws;
-
-        async function createPeerConnection() {
-            pc = new RTCPeerConnection();
-
-            const dataChannel = pc.createDataChannel("telemetry");
-
-            dataChannel.onopen = () => console.log("Data channel opened.");
-            dataChannel.onclose = () => console.log("Data channel closed.");
-            dataChannel.onmessage = e => document.getElementById('telemetry').textContent = e.data;
-
-            pc.onicecandidate = event => {
-                if (event.candidate) {
-                    console.log('event candidate', event.candidate)
-                    ws.send(event.candidate);
-                }
-            };
-
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            ws.send(JSON.stringify({'sdp': pc.localDescription.toJSON()}));
-        }
-
-        function startWebSocket() {
-            ws = new WebSocket('ws://localhost:8765');
-            ws.onopen = () => {
-                console.log('WebSocket connected');
-                createPeerConnection();
-            };
-            ws.onmessage = async event => {
-                const data = JSON.parse(event.data);
-                if (data.sdp) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(data));
-                } else if (data.candidate) {
-                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-                }
-            };
-        }
-
-        window.onload = startWebSocket;
-    </script>
-</head>
-<body>
-    <h2>Telemetry Data</h2>
-    <pre id="telemetry"></pre>
-</body>
-</html> -->
-
-
 <!DOCTYPE html>
 <html lang="en">
 
@@ -124,17 +68,17 @@
 
         
         function updateIndicators(pitch, roll, yaw) {
-            const pitchElement = document.getElementById('pitch');
-            const rollElement = document.getElementById('roll');
-            const yawElement = document.getElementById('yaw');
+            // const pitchElement = document.getElementById('pitch');
+            // const rollElement = document.getElementById('roll');
+            // const yawElement = document.getElementById('yaw');
             
-            pitchElement.style.transform = `rotateX(${pitch}deg)`;
-            rollElement.style.transform = `rotateY(${roll}deg)`;
-            yawElement.style.transform = `rotateZ(${yaw}deg)`;
+            // pitchElement.style.transform = `rotateX(${pitch}deg)`;
+            // rollElement.style.transform = `rotateY(${roll}deg)`;
+            // yawElement.style.transform = `rotateZ(${yaw}deg)`;
 
-            pitchElement.textContent = `Pitch: ${pitch}°`;
-            rollElement.textContent = `Roll: ${roll}°`;
-            yawElement.textContent = `Yaw: ${yaw}°`;
+            // pitchElement.textContent = `Pitch: ${pitch}°`;
+            // rollElement.textContent = `Roll: ${roll}°`;
+            // yawElement.textContent = `Yaw: ${yaw}°`;
         }
 
 
