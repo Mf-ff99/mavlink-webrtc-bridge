@@ -1,4 +1,5 @@
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, VideoStreamTrack, MediaStreamTrack
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceCandidate, VideoStreamTrack, MediaStreamTrack
+from aiortc.contrib.media import MediaPlayer
 from os import system
 from mavsdk import System
 import asyncio
@@ -16,19 +17,26 @@ drone = System()
 pixhawkConnectionType = ["udp", "serial"]
 
 # camera id goes here -> /dev/v4l/by-id/<ID here>
-cameraPath = '/dev/video1'
+cameraPath = 2
+
+config = RTCConfiguration()
+config.iceServers = { 'urls': 'stun:stun.l.google.com:19302?transport=udp'}
+
+def create_media_player(device_index=0):
+    camera_device = f"/dev/video{device_index}"
+    return MediaPlayer(f"{camera_device}", format="v4l2", options={"framerate": "30", "video_size": "640x480"})
 
 
 class CameraVideoTrack(VideoStreamTrack):
-    def __init__(self):
+    def __init__(self, player):
         super().__init__()
-        self.cap = cv2.VideoCapture('v4l2src device=/dev/video0 ! videoconvert ! appsink', cv2.CAP_GSTREAMER)
+        self.player = player
 
     async def recv(self):
-        frame = await self.cap.read() 
+        frame = await self.player.video.recv()
         return frame
 
-# configure for different vehicle connection types
+# configure for different mavlink connection types
 def check_usb_devices():
     try:
         result = subprocess.run(['lsusb'], capture_output=True, text=True)
@@ -44,7 +52,6 @@ def check_usb_devices():
     except Exception as e:
         print(f"An error occurred: {e}")
 
-
 async def init_drone():
     usbDevice = None
     usbDevice = check_usb_devices()
@@ -56,6 +63,9 @@ async def init_drone():
 
 async def continuous_data_sender(channel, drone):
     """A coroutine to send data continuously over an open data channel."""
+
+    if drone is None:
+        return
 
     while True:
         if (channel.readyState == "open") and drone:
@@ -72,8 +82,13 @@ async def continuous_data_sender(channel, drone):
 async def websocket_handler(websocket, path):
     pc = RTCPeerConnection()
     data_channel = None
+    video_track = None
 
-    video_track = CameraVideoTrack()
+    mediaPlayer = create_media_player(device_index=2)
+
+    video_track = CameraVideoTrack(mediaPlayer)
+    
+    pc.addTrack(video_track)
 
     # addTrack created from cameraID to PeerConnection
 
@@ -81,16 +96,15 @@ async def websocket_handler(websocket, path):
     async def on_data_channel(channel):
         nonlocal data_channel
         data_channel = channel
-        pc.addTrack(video_track)
-        print(video_track)
         print("Data channel received:", channel.label)
-        await continuous_data_sender(data_channel, drone)
+        # if drone is not None:
+        #     await continuous_data_sender(data_channel, drone)
 
     async for message in websocket:
         data = json.loads(message)
         if 'sdp' in data:
             sdp = RTCSessionDescription(sdp=data['sdp']['sdp'], type=data['sdp']['type'])
-            print('sdp', sdp)
+            # print('sdp', sdp)
             await pc.setRemoteDescription(sdp)
             if sdp.type == 'offer':
                 await pc.setLocalDescription(await pc.createAnswer())
@@ -100,9 +114,9 @@ async def websocket_handler(websocket, path):
             await pc.addIceCandidate(candidate)
 
 async def main():
-    server = await websockets.serve(websocket_handler, 'localhost', 8765)
-    print("Server running at ws://localhost:8765")
-    drone = await init_drone()
+    server = await websockets.serve(websocket_handler, '0.0.0.0', 8765)
+    print("Server running at ws://0.0.0.0:8765")
+    # drone = await init_drone()
     await server.wait_closed()
 
 if __name__ == "__main__":
