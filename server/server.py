@@ -1,27 +1,40 @@
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, VideoStreamTrack, MediaStreamTrack
+from os import system
+from mavsdk import System
 import asyncio
 import json
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 import websockets
-from mavsdk import System
 import usb.core
 import usb.util
-from os import system
 import subprocess
 import time
+import cv2
 
 drone = None
 drone = System()
 
 pixhawkConnectionType = ["udp", "serial"]
 
+# camera id goes here -> /dev/v4l/by-id/<ID here>
+cameraPath = '/dev/video1'
+
+
+class CameraVideoTrack(VideoStreamTrack):
+    def __init__(self):
+        super().__init__()
+        self.cap = cv2.VideoCapture('v4l2src device=/dev/video0 ! videoconvert ! appsink', cv2.CAP_GSTREAMER)
+
+    async def recv(self):
+        frame = await self.cap.read() 
+        return frame
+
 # configure for different vehicle connection types
 def check_usb_devices():
     try:
-        # Run the 'lsusb' command and capture its output
         result = subprocess.run(['lsusb'], capture_output=True, text=True)
         output = result.stdout
 
-        # Check if the word 'Orange' is in the output
+        # check if the word 'Orange' is in the output
         if 'Orange' in output:
             return 'CubeOrange'
         else:
@@ -60,10 +73,16 @@ async def websocket_handler(websocket, path):
     pc = RTCPeerConnection()
     data_channel = None
 
+    video_track = CameraVideoTrack()
+
+    # addTrack created from cameraID to PeerConnection
+
     @pc.on("datachannel")
     async def on_data_channel(channel):
         nonlocal data_channel
         data_channel = channel
+        pc.addTrack(video_track)
+        print(video_track)
         print("Data channel received:", channel.label)
         await continuous_data_sender(data_channel, drone)
 
@@ -71,6 +90,7 @@ async def websocket_handler(websocket, path):
         data = json.loads(message)
         if 'sdp' in data:
             sdp = RTCSessionDescription(sdp=data['sdp']['sdp'], type=data['sdp']['type'])
+            print('sdp', sdp)
             await pc.setRemoteDescription(sdp)
             if sdp.type == 'offer':
                 await pc.setLocalDescription(await pc.createAnswer())
