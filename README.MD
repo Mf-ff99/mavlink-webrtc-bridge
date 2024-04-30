@@ -5,6 +5,8 @@ python 3.8.10 or greater
 
 sudo pip install aiortc websockets asyncio httpserver
 
+sudo apt install ffmpeg
+
 # start the webrtc-mavlink bridge
 python3 ./server/server.py
 

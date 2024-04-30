@@ -1,4 +1,4 @@
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceCandidate, VideoStreamTrack, MediaStreamTrack
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, RTCIceServer, RTCIceCandidate, VideoStreamTrack, MediaStreamTrack
 from aiortc.contrib.media import MediaPlayer
 from os import system
 from mavsdk import System
@@ -10,17 +10,26 @@ import usb.util
 import subprocess
 import time
 import cv2
+import ssl
 
 drone = None
 drone = System()
 
 pixhawkConnectionType = ["udp", "serial"]
 
+# websocket ssl
+# ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+# ssl_context.load_cert_chain('/domain.crt', '/key.pem')
+
 # camera id goes here -> /dev/v4l/by-id/<ID here>
 cameraPath = 2
 
-config = RTCConfiguration()
-config.iceServers = { 'urls': 'stun:stun.l.google.com:19302?transport=udp'}
+# configure STUN endpoints
+ice_servers = [
+    RTCIceServer(urls="stun:stun.l.google.com:19302")
+]
+
+config = RTCConfiguration(ice_servers)
 
 def create_media_player(device_index=0):
     camera_device = f"/dev/video{device_index}"
@@ -44,9 +53,13 @@ def check_usb_devices():
 
         # check if the word 'Orange' is in the output
         if 'Orange' in output:
+            print('CubeOrange fmu found')
             return 'CubeOrange'
+        if 'PX4' in output:
+            print('PX4 fmu found')
+            return 'PX4'
         else:
-            print("No compatible hardware devices are connected. Searching...")
+            print("No compatible MAVlink devices are connected. Searching...")
             time.sleep(1000)
             check_usb_devices()
     except Exception as e:
@@ -59,6 +72,10 @@ async def init_drone():
     if usbDevice == 'CubeOrange':
         await drone.connect(system_address="serial:///dev/ttyACM0:57600")
         print("Connected to CubeOrange on /dev/ttyACM0:57600!")
+    if usbDevice == 'PX4':
+        print('trying to connect to px4')
+        await drone.connect(system_address="serial:///dev/ttyACM0:57600")
+        print("Connected to ARK FMU on /dev/ttyACM0:57600!")
     return
 
 async def continuous_data_sender(channel, drone):
@@ -80,15 +97,19 @@ async def continuous_data_sender(channel, drone):
         await asyncio.sleep(.1)
 
 async def websocket_handler(websocket, path):
-    pc = RTCPeerConnection()
+    # pass iceServers config to PeerConnection
+    pc = RTCPeerConnection(config)
     data_channel = None
     video_track = None
 
-    mediaPlayer = create_media_player(device_index=2)
+    mediaPlayer = create_media_player(device_index=0)
 
     video_track = CameraVideoTrack(mediaPlayer)
     
     pc.addTrack(video_track)
+
+    if video_track is not None:
+        print('video track created')
 
     # addTrack created from cameraID to PeerConnection
 
@@ -116,7 +137,7 @@ async def websocket_handler(websocket, path):
 async def main():
     server = await websockets.serve(websocket_handler, '0.0.0.0', 8765)
     print("Server running at ws://0.0.0.0:8765")
-    # drone = await init_drone()
+    drone = await init_drone()
     await server.wait_closed()
 
 if __name__ == "__main__":

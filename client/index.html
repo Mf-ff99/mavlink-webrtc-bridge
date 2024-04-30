@@ -6,36 +6,105 @@
     <title>WebRTC Data Channel Example</title>
     <styles src="./styles.css"></styles>
     <script>
-        let pc;
-        let ws;
+        let pc
+        let ws
+
+        // attitude indicator
+        document.addEventListener("DOMContentLoaded", function() {
+        const canvas = document.getElementById('attitude');
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const horizonLine = centerY;
+
+        function drawAttitude(roll, pitch) {
+            ctx.clearRect(0, 0, width, height);  // Clear the canvas
+
+            // Save the original context
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(-roll * Math.PI / 180);  // Convert degrees to radians and rotate
+
+            // Adjust pitch
+            const pitchPixelShift = pitch * 5; // Each degree of pitch moves the horizon 5 pixels
+            const horizonY = horizonLine - pitchPixelShift;
+
+            // Draw the sky
+            ctx.fillStyle = 'skyblue';
+            ctx.fillRect(-width, -height, width * 2, horizonY + height);
+
+            // Draw the ground
+            ctx.fillStyle = 'saddlebrown';
+            ctx.fillRect(-width, horizonY, width * 2, height * 2 - horizonY);
+
+            // Draw the horizon line
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-width, 0);
+            ctx.lineTo(width * 2, 0);
+            ctx.stroke();
+
+            // Restore the original context
+            ctx.restore();
+
+            // Draw the fixed aircraft indicator in the center
+            ctx.beginPath();
+            ctx.moveTo(centerX - 10, centerY);
+            ctx.lineTo(centerX + 10, centerY);
+            ctx.moveTo(centerX, centerY - 10);
+            ctx.lineTo(centerX, centerY + 10);
+            ctx.strokeStyle = 'red';
+            ctx.stroke();
+        }
+
+        // Example usage
+        // drawAttitude(10, 5);  // 10 degrees roll, 5 degrees pitch
+        });
+
+        // STUN configuration
+        const config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        }
 
         async function createPeerConnection() {
-            pc = new RTCPeerConnection();
+            pc = new RTCPeerConnection(config)
 
-            const dataChannel = pc.createDataChannel("telemetry");
+            const dataChannel = pc.createDataChannel("telemetry")
 
-            // pc.addTrack('track')
+            pc.addTransceiver('video')
 
             pc.ontrack = function(e) {
-                console.log('video')
-                if (e.track.kind == 'video') {
-                    const element = document.createElement('video');
-                    element.srcObject = new MediaStream([e.track]);
-                    element.autoplay = true;
-                    element.controls = true;
-                    document.body.appendChild(element);
-                    }
-            };
+                console.log('Received track:', e.track)
+                console.log('Associated streams:', e.streams)
 
-            dataChannel.onopen = () => console.log("Data channel opened.");
-            dataChannel.onclose = () => console.log("Data channel closed.");
+                if (e.streams && e.streams[0]) {
+                    var videoElement = document.getElementById('video')
+                    if (videoElement) {
+                        videoElement.srcObject = e.streams[0]
+                        console.log('Video source object set.')
+                    } else {
+                        console.error('Video element not found!')
+                    }
+                } else {
+                    console.error('No streams available on the event!')
+                }
+            }
+
+            dataChannel.onopen = () => console.log("Data channel opened.")
+            dataChannel.onclose = () => console.log("Data channel closed.")
             dataChannel.onmessage = e => {
                 // console.log('message!')
-                document.getElementById('telemetry').textContent = e.data;
+                document.getElementById('telemetry').textContent = e.data
                 // console.log(e.data)
-                const [yaw, pitch, roll] = e.data.match(/-?\d+\.\d+/g).map(Number);
-                // console.log(yaw, pitch, roll)
+                const [yaw, pitch, roll] = e.data.match(/-?\d+\.\d+/g).map(Number)
+                console.log(yaw, pitch, roll)
                 updateIndicators(pitch, roll, yaw)
+                drawAttitude(roll, pitch)
             }
             pc.onicecandidate = event => {
                 if (event.candidate) {
@@ -51,50 +120,45 @@
                                 component: 1,
                                 sdpMid: event.candidate.sdpMid,
                                 sdpMLineIndex: event.candidate.sdpMLineIndex,
-                                type: event.candidate.type 
+                                type: event.candidate.type,
                             }
-                        }));
+                        }))
                     }
                 }
-            };
+            }
 
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            ws.send(JSON.stringify({ 'sdp': pc.localDescription }));
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            ws.send(JSON.stringify({ 'sdp': pc.localDescription }))
         }
 
         function startWebSocket() {
-            ws = new WebSocket('ws://localhost:8765');
+            ws = new WebSocket('ws://localhost:8765')
             ws.onopen = () => {
-                console.log('WebSocket connected');
-                createPeerConnection();
-            };
+                console.log('WebSocket connected')
+                createPeerConnection()
+            }
             ws.onmessage = async event => {
-                const data = JSON.parse(event.data);
+                const data = JSON.parse(event.data)
                 if (data.sdp) {
-                    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
                 } else if (data.candidate) {
-                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                    await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
                 }
-            };
+            }
         }
-
         
         function updateIndicators(pitch, roll, yaw) {
-            const pitchElement = document.getElementById('pitch');
-            const rollElement = document.getElementById('roll');
-            const yawElement = document.getElementById('yaw');
-            
-            // pitchElement.style.transform = `rotateX(${pitch}deg)`;
-            // rollElement.style.transform = `rotateY(${roll}deg)`;
-            // yawElement.style.transform = `rotateZ(${yaw}deg)`;
+            const pitchElement = document.getElementById('pitch')
+            const rollElement = document.getElementById('roll')
+            const yawElement = document.getElementById('yaw')
 
-            pitchElement.textContent = `Pitch: ${pitch}°`;
-            rollElement.textContent = `Roll: ${roll}°`;
-            yawElement.textContent = `Yaw: ${yaw}°`;
+            pitchElement.textContent = `Pitch: ${pitch}°`
+            rollElement.textContent = `Roll: ${roll}°`
+            yawElement.textContent = `Yaw: ${yaw}°`
         }
 
-        window.onload = startWebSocket;
+        window.onload = startWebSocket
     </script>
 </head>
 
@@ -107,4 +171,12 @@
             <div class="indicator" id="roll">Roll: 0°</div>
             <div class="indicator" id="yaw">Yaw: 0°</div>
         </div>
+
+        <div class="attitude-indicator">
+            <canvas id="attitude" width="300" height="300"></canvas>
+        </div>
+
+        <video id="video" autoplay controls>
+
+        </video>
 </body>
