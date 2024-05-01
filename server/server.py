@@ -8,6 +8,7 @@ import websockets
 import usb.core
 import usb.util
 import subprocess
+import threading
 import time
 import cv2
 import ssl
@@ -23,6 +24,9 @@ pixhawkConnectionType = ["udp", "serial"]
 
 # camera id goes here -> /dev/v4l/by-id/<ID here>
 cameraPath = 2
+
+# camera device index ie /dev/video2 would be 2
+camera_id = 0
 
 # configure STUN endpoints
 ice_servers = [
@@ -51,7 +55,6 @@ def check_usb_devices():
         result = subprocess.run(['lsusb'], capture_output=True, text=True)
         output = result.stdout
 
-        # check if the word 'Orange' is in the output
         if 'Orange' in output:
             print('CubeOrange fmu found')
             return 'CubeOrange'
@@ -78,12 +81,24 @@ async def init_drone():
         print("Connected to ARK FMU on /dev/ttyACM0:57600!")
     return
 
-async def continuous_data_sender(channel, drone):
-    """A coroutine to send data continuously over an open data channel."""
+async def close_peer_connection(pc, mediaPlayer, video_track):
+    print(pc, 'pc')
+    if pc:
+        for sender in pc.getSenders():
+            if sender:
+                await sender.stop()
+                print('sender stopped')
 
-    if drone is None:
+        # close the peer connection and video stream
+        await pc.close()
+        mediaPlayer.video.stop()
+        pc = None
         return
 
+async def continuous_data_sender(channel, drone, pc, mediaPlayer, video_track):
+    """A coroutine to send data continuously over an open data channel."""
+    if drone is None:
+        return
     while True:
         if (channel.readyState == "open") and drone:
             print('datachannel active')
@@ -92,17 +107,19 @@ async def continuous_data_sender(channel, drone):
                     message = f"Yaw: {telemetry.yaw_deg}, Pitch: {telemetry.pitch_deg}, Roll: {telemetry.roll_deg}"
                     channel.send(message)
                 else:
-                    print("Data channel is closed. Stopping telemetry stream.")
+                    print("Data channel is closed. Stopping all streams")
+                    await close_peer_connection(pc, mediaPlayer, video_track)
                     break
         await asyncio.sleep(.1)
 
+# mediaPlayer = run_media_player(device_index=0)
 async def websocket_handler(websocket, path):
     # pass iceServers config to PeerConnection
+    mediaPlayer = create_media_player(camera_id)
+
     pc = RTCPeerConnection(config)
     data_channel = None
     video_track = None
-
-    mediaPlayer = create_media_player(device_index=0)
 
     video_track = CameraVideoTrack(mediaPlayer)
     
@@ -118,8 +135,8 @@ async def websocket_handler(websocket, path):
         nonlocal data_channel
         data_channel = channel
         print("Data channel received:", channel.label)
-        # if drone is not None:
-        #     await continuous_data_sender(data_channel, drone)
+        if drone is not None:
+            await continuous_data_sender(data_channel, drone, pc, mediaPlayer, video_track)
 
     async for message in websocket:
         data = json.loads(message)

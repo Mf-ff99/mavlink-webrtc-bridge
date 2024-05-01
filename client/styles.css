@@ -16,3 +16,8 @@
     background-color: lightblue;
     transition: transform 0.3s ease-in-out;
 }
+
+button:disabled {
+    opacity: .6;
+    cursor: not-allowed;
+}
