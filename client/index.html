@@ -16,7 +16,7 @@
         let pc
         let ws
 
-        // isConnected
+        // isConnected flag
         var isConnected = false
 
         // attitude indicator
@@ -35,7 +35,7 @@
             centerX = width / 2;
             centerY = height / 2;
             horizonLine = centerY;
-        });
+        })
 
         // STUN/TURN configuration
         const config = {
@@ -121,16 +121,19 @@
 
             dataChannel.onopen = () => {
                 console.log("Data channel opened.")
+                const disconnectButton = document.getElementById('disconnectButton')
+                disconnectButton.disabled = false
             }
             dataChannel.onclose = () => {
                 console.log("Data channel closed.")
                 isConnected = false
+
             }
             dataChannel.onmessage = e => {
                 const [yaw, pitch, roll] = e.data.match(/-?\d+\.\d+/g).map(Number)
                 updateIndicators(pitch, roll, yaw)
                 drawAttitude(roll, pitch)
-                isConnected = true
+                isConnected = true            
             }
             pc.onicecandidate = event => {
                 if (event.candidate) {
@@ -163,10 +166,7 @@
             ws.onopen = () => {
                 const disconnectButton = document.getElementById('connectButton')
                 const connectButton = document.getElementById('connectButton')
-                if (isConnected) {
-                        connectButton.disabled = true
-                        disconnectButton.disabled = false
-                    }
+  
                 console.log('WebSocket connected')
                 createPeerConnection()
             }
@@ -192,7 +192,9 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const connectButton = document.getElementById('connectButton');
-            updateMap(48.52435, 13.63872)
+            const disconnectButton = document.getElementById('disconnectButton')
+
+            // updateMap(48.52435, 13.63872)
 
             connectButton.addEventListener('click', async function() {
                     if (!isConnected) {
@@ -200,14 +202,23 @@
                         connectButton.disabled = true
                     }
                 })
+
+            disconnectButton.addEventListener('click', async function() {
+                if (isConnected) {
+                    pc.close()
+                    connectButton.disabled = false
+                    disconnectButton.disabled = true
+                }
             })
+        })
+
             
 
     </script>
 </head>
 
 <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light justify-content-between">
         <h2>Command Center</h2>
         <div class="connectButtonContainer">
             <button id="connectButton">Connect</button>
