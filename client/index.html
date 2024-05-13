@@ -159,13 +159,13 @@
             dataChannel.onclose = () => {
                 console.log("Data channel closed.")
                 isConnected = false
-
             }
+
             dataChannel.onmessage = e => {
                 const data = e.data.match(/-?\d+\.\d+/g).map(Number)
                 const [yaw, pitch, roll, latitude, longitude, altitude] = data
 
-                console.log(data)
+                // console.log(data)
 
                 updateIndicators(pitch, roll, yaw)
                 drawAttitude(roll, pitch)
@@ -199,11 +199,11 @@
         }
 
         function startWebSocket() {
+            const disconnectButton = document.getElementById('connectButton')
+            const connectButton = document.getElementById('connectButton')
+
             ws = new WebSocket('ws://localhost:8765')
             ws.onopen = () => {
-                const disconnectButton = document.getElementById('connectButton')
-                const connectButton = document.getElementById('connectButton')
-  
                 console.log('WebSocket connected')
                 createPeerConnection()
             }
@@ -214,6 +214,9 @@
                 } else if (data.candidate) {
                     await pc.addIceCandidate(new RTCIceCandidate(data.candidate))
                 }
+            }
+            ws.onclose = () => {
+                connectButton.disabled = false
             }
         }
         
