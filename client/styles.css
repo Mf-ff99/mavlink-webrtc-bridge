@@ -72,3 +72,6 @@ nav h2 {
     flex-direction: row;
     justify-content: space-around;
 }
+
+/* map styles */
+#map { height: 180px; }

@@ -99,18 +99,29 @@ async def continuous_data_sender(channel, drone, pc, mediaPlayer, video_track):
     """A coroutine to send data continuously over an open data channel."""
     if drone is None:
         return
+    
+    async def send_telemetry(telemetry_type, format_func):
+        """Send formatted telemetry data over the data channel."""
+        async for telemetry in telemetry_type:
+            if channel.readyState == "open":
+                message = format_func(telemetry)
+                channel.send(message)
+            else:
+                print("Data channel is closed. Stopping all streams")
+                await close_peer_connection(pc, mediaPlayer, video_track)
+                break
+
+    attitude_format = lambda t: f"Yaw: {t.yaw_deg}, Pitch: {t.pitch_deg}, Roll: {t.roll_deg}"
+    gps_format = lambda t: f"Latitude: {t.latitude_deg}, Longitude: {t.longitude_deg}, Altitude: {t.absolute_altitude_m}"
+    
     while True:
-        if (channel.readyState == "open") and drone:
+        if channel.readyState == "open" and drone:
             print('datachannel active')
-            async for telemetry in drone.telemetry.attitude_euler():
-                if channel.readyState == "open":
-                    message = f"Yaw: {telemetry.yaw_deg}, Pitch: {telemetry.pitch_deg}, Roll: {telemetry.roll_deg}"
-                    channel.send(message)
-                else:
-                    print("Data channel is closed. Stopping all streams")
-                    await close_peer_connection(pc, mediaPlayer, video_track)
-                    break
-        await asyncio.sleep(.1)
+            await asyncio.gather(
+                send_telemetry(drone.telemetry.attitude_euler(), attitude_format),
+                send_telemetry(drone.telemetry.position(), gps_format)
+            )
+        await asyncio.sleep(0.1)
 
 # mediaPlayer = run_media_player(device_index=0)
 async def websocket_handler(websocket, path):

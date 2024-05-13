@@ -7,15 +7,18 @@
     <!-- <styles src="/styles.css"></styles> -->
     <link rel="stylesheet" href="./styles.css">
     <!-- styles and script src for maps -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""/>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
-
-    <script src="./mapView.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""></script>
+    <!-- <script src="./mapView.js"></script> -->
     <script>
         let pc
         let ws
-
+        var map
         // isConnected flag
         var isConnected = false
 
@@ -42,6 +45,35 @@
         iceServers: [
             { urls: 'stun:stun.l.google.com:19302' }
             ]
+        }
+
+        // updateMap(48.52435, 13.63872)
+
+        // draw map
+        function createMap() {
+            map = L.map('map').setView([0, 0], 10)
+    
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map)
+        }
+
+        function updateMap(lat, long) {
+            if (!map) {
+                console.error('Map is not initialized.');
+                return;
+            }
+
+            map.eachLayer(function(layer) {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            })
+
+            L.marker([lat, long]).addTo(map)
+                .bindPopup('Drone Location').openPopup();
+
+            map.panTo(new L.LatLng(lat, long));
         }
 
         // attitude canvas
@@ -130,10 +162,14 @@
 
             }
             dataChannel.onmessage = e => {
-                const [yaw, pitch, roll] = e.data.match(/-?\d+\.\d+/g).map(Number)
+                const data = e.data.match(/-?\d+\.\d+/g).map(Number)
+                const [yaw, pitch, roll, latitude, longitude, altitude] = data
+
+                console.log(data)
+
                 updateIndicators(pitch, roll, yaw)
                 drawAttitude(roll, pitch)
-                isConnected = true            
+                isConnected = true      
             }
             pc.onicecandidate = event => {
                 if (event.candidate) {
@@ -153,7 +189,8 @@
                             }
                         }))
                     }
-                }
+                }            // updateMap(48.52435, 13.63872)
+
             }
 
             const offer = await pc.createOffer()
@@ -194,7 +231,8 @@
             const connectButton = document.getElementById('connectButton');
             const disconnectButton = document.getElementById('disconnectButton')
 
-            // updateMap(48.52435, 13.63872)
+            // create map after DOM is loaded
+            createMap()
 
             connectButton.addEventListener('click', async function() {
                     if (!isConnected) {
